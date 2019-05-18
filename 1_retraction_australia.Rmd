@@ -1,0 +1,124 @@
+---
+title: "Retraction Watch data for Australia"
+author: "Adrian Barnett"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000, scipen = 999) # Wide pages and no scientific numbers
+library(dplyr)
+library(tables)
+library(pander)
+panderOptions('table.emphasize.rownames', FALSE)
+panderOptions('keep.trailing.zeros', TRUE)
+panderOptions('table.split.table', Inf)
+panderOptions('table.split.cells', Inf)
+panderOptions('big.mark', ',')
+library(ggplot2)
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+cbPalette = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7") # colour-blind palette
+## load the data
+load('data/AnalysisReady.RData') # from 0_read_data.R
+```
+
+There are `r nrow(wide)` cases from Australia in the Retraction watch database as of `r format(date.search, '%d-%b-%Y')`.
+
+# Retractions over over time
+
+## Publication dates over time
+
+The plot below shows the dates over time that the papers were published.
+
+```{r over.time, fig.width=9, fig.height=7}
+# make cumulative sum 
+to.plot = group_by(wide, rtype1) %>%
+  mutate(dummy=1) %>%
+  arrange(rtype1, paper.date) %>%
+  mutate(count = cumsum(dummy),
+         min = min(count)) %>%
+  select(rtype1, paper.date, count, min) %>%
+  mutate(count = count - min(count)) %>%
+  ungroup()
+#
+time.plot = ggplot(data=to.plot, aes(x=paper.date, y=count, col=factor(rtype1)))+
+  geom_step(size=1.1) +
+  ylab('Cumulative number')+
+  xlab('Date of publication')+
+  scale_color_manual('Type', values=cbPalette)+
+  g.theme+
+  theme(legend.position=c(0.2,0.8), text=element_text(size=20))
+time.plot
+```
+
+## Retraction dates over time
+
+The plot below shows the dates over time that the papers were retracted.
+
+```{r over.time.retraction, fig.width=9, fig.height=7}
+# make cumulative sum 
+to.plot = group_by(wide, rtype1) %>%
+  mutate(dummy=1) %>%
+  arrange(rtype1, retraction.date) %>%
+  mutate(count = cumsum(dummy),
+         min = min(count)) %>%
+  select(rtype1, retraction.date, count, min) %>%
+  mutate(count = count - min(count)) %>%
+  ungroup()
+#
+time.plot = ggplot(data=to.plot, aes(x=retraction.date, y=count, col=factor(rtype1)))+
+  geom_step(size=1.1) +
+  ylab('Cumulative number')+
+  xlab('Date of retraction')+
+  scale_color_manual('Type', values=cbPalette)+
+  g.theme+
+  theme(legend.position=c(0.2,0.8), text=element_text(size=20))
+time.plot
+```
+
+# Countries
+
+The table below shows the top ten countries bar Australia. Australia was involved in every case. Some papers involved multiple countries so the total is greater than the total number of papers. All countries outside the top ten are grouped together as "Other".
+
+```{r countries}
+# Order country counts by frequency
+tab = filter(countries, country !='Australia') %>%
+  group_by(country) %>%
+  summarise(count = n()) %>%
+  mutate(rank = rank(-count),
+         Country = ifelse(rank <= 10, as.character(country), 'Other')) %>%
+  group_by(Country) %>%
+  summarise(Submissions = sum(count)) %>% 
+  mutate(rank = rank(-Submissions),
+         Percent = 100*Submissions / sum(Submissions)) %>%
+  arrange(rank) %>%
+  select(rank, Country, Submissions, Percent)
+# Make total row
+  total = summarise(tab, Submissions = sum(Submissions), Percent = sum(Percent)) %>%
+    mutate(Country = 'Total', rank=NA)
+  table = bind_rows(tab, total)
+pander(table, digits=c(0,0,0,2))
+```
+# Reasons
+
+The table below shows the top ten reasons, with all other reasons outside the top ten being groups as "Other". Many papers had multiple reasons so the total is greater than the total number of papers.
+
+```{r reasons}
+# Order reason counts by frequency
+tab = group_by(reasons, reason) %>%
+  summarise(count = n()) %>%
+  mutate(rank = rank(-count),
+         Reason = ifelse(rank <= 10, as.character(reason), 'Other')) %>%
+  group_by(Reason) %>%
+  summarise(Count = sum(count)) %>% 
+  mutate(rank = rank(-Count),
+         Percent = 100*Count / sum(Count)) %>%
+  arrange(rank) %>%
+  select(rank, Reason, Count, Percent)
+# Make total row
+  total = summarise(tab, Count = sum(Count), Percent = sum(Percent)) %>%
+    mutate(Reason = 'Total', rank=NA)
+  table = bind_rows(tab, total)
+pander(table, digits=c(0,0,0,2))
+```
